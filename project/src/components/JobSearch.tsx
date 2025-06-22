@@ -1,0 +1,512 @@
+import React, { useState } from 'react';
+import { Search, MapPin, Calendar, Globe, Settings, Briefcase, Target, CheckSquare, Square } from 'lucide-react';
+import { JobCard } from './JobCard';
+import { JobDetailsModal } from './JobDetailsModal';
+
+interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  postedDate: string;
+  description: string;
+  employmentType: string;
+  experienceLevel: string;
+  salary?: string;
+  linkedinUrl: string;
+  companyLogo?: string;
+  applicants?: number;
+}
+
+interface JobSearchProps {
+  onJobsTailored: (jobs: Job[]) => void;
+}
+
+export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
+  const [searchParams, setSearchParams] = useState({
+    jobTitle: '',
+    location: '',
+    datePosted: 'any'
+  });
+  const [useProxy, setUseProxy] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [searchPerformed, setSearchPerformed] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [isTailoring, setIsTailoring] = useState(false);
+
+  const dateOptions = [
+    { value: 'any', label: 'Any time' },
+    { value: '1', label: 'Past 24 hours' },
+    { value: '7', label: 'Past week' },
+    { value: '30', label: 'Past month' }
+  ];
+
+  const handleInputChange = (field: string, value: string) => {
+    setSearchParams(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const simulateJobSearch = async (): Promise<Job[]> => {
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Mock job data - in real implementation, this would come from LinkedIn API
+    const mockJobs: Job[] = [
+      {
+        id: '1',
+        title: searchParams.jobTitle || 'Software Engineer',
+        company: 'TechCorp Inc.',
+        location: searchParams.location || 'San Francisco, CA',
+        postedDate: '2 days ago',
+        description: 'We are looking for a talented software engineer to join our growing team. You will be responsible for developing scalable web applications using modern technologies like React, Node.js, and cloud platforms. This role offers excellent growth opportunities and the chance to work on cutting-edge projects that impact millions of users worldwide.',
+        employmentType: 'Full-time',
+        experienceLevel: 'Mid-Senior level',
+        salary: '$120,000 - $180,000',
+        linkedinUrl: 'https://linkedin.com/jobs/view/123456',
+        applicants: 47
+      },
+      {
+        id: '2',
+        title: searchParams.jobTitle || 'Senior Frontend Developer',
+        company: 'InnovateLabs',
+        location: searchParams.location || 'New York, NY',
+        postedDate: '1 week ago',
+        description: 'Join our frontend team to build amazing user experiences that delight our customers. We work with React, TypeScript, and modern web technologies to create products used by millions. You\'ll collaborate with designers, product managers, and backend engineers to deliver high-quality features.',
+        employmentType: 'Full-time',
+        experienceLevel: 'Senior level',
+        salary: '$140,000 - $200,000',
+        linkedinUrl: 'https://linkedin.com/jobs/view/789012',
+        applicants: 23
+      },
+      {
+        id: '3',
+        title: searchParams.jobTitle || 'Product Manager',
+        company: 'StartupXYZ',
+        location: searchParams.location || 'Austin, TX',
+        postedDate: '3 days ago',
+        description: 'Lead product strategy and work cross-functionally with engineering, design, and business teams to deliver exceptional products that delight our customers. You\'ll be responsible for defining product roadmaps, gathering requirements, and ensuring successful product launches.',
+        employmentType: 'Full-time',
+        experienceLevel: 'Mid-Senior level',
+        linkedinUrl: 'https://linkedin.com/jobs/view/345678',
+        applicants: 89
+      },
+      {
+        id: '4',
+        title: searchParams.jobTitle || 'Data Scientist',
+        company: 'DataDriven Co.',
+        location: searchParams.location || 'Seattle, WA',
+        postedDate: '5 days ago',
+        description: 'Apply machine learning and statistical analysis to solve complex business problems. Work with large datasets, build predictive models, and collaborate with cross-functional teams to drive data-informed decision making across the organization.',
+        employmentType: 'Full-time',
+        experienceLevel: 'Senior level',
+        salary: '$130,000 - $190,000',
+        linkedinUrl: 'https://linkedin.com/jobs/view/901234',
+        applicants: 156
+      },
+      {
+        id: '5',
+        title: searchParams.jobTitle || 'UX Designer',
+        company: 'DesignStudio',
+        location: searchParams.location || 'Los Angeles, CA',
+        postedDate: '1 day ago',
+        description: 'Create intuitive and beautiful user experiences for our digital products. Collaborate with product managers, engineers, and other designers to bring innovative design solutions to life. You\'ll conduct user research, create wireframes and prototypes, and ensure our products are accessible and user-friendly.',
+        employmentType: 'Full-time',
+        experienceLevel: 'Mid level',
+        salary: '$90,000 - $130,000',
+        linkedinUrl: 'https://linkedin.com/jobs/view/567890',
+        applicants: 34
+      }
+    ];
+
+    return mockJobs;
+  };
+
+  const storeSelectedJobsToBackend = async (selectedJobsData: Job[]) => {
+    try {
+      const payload = {
+        timestamp: new Date().toISOString(),
+        searchParams: searchParams,
+        selectedJobs: selectedJobsData,
+        totalJobsFound: jobs.length,
+        selectionCount: selectedJobsData.length,
+        metadata: {
+          userAgent: navigator.userAgent,
+          searchId: `search_${Date.now()}`,
+          proxyUsed: useProxy,
+          proxyUrl: useProxy ? proxyUrl : null
+        }
+      };
+
+      console.log('Sending selected jobs to backend:', payload);
+
+      const response = await fetch('/api/store-selected-jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Backend response:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('Error storing selected jobs to backend:', error);
+      throw error;
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchParams.jobTitle.trim()) {
+      alert('Please enter a job title');
+      return;
+    }
+
+    if (useProxy && !proxyUrl.trim()) {
+      alert('Please enter a proxy URL');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchPerformed(true);
+    setSelectedJobs(new Set()); // Clear previous selections
+
+    try {
+      console.log('Searching with params:', searchParams);
+      console.log('Using proxy:', useProxy ? proxyUrl : 'No proxy');
+      
+      const searchResults = await simulateJobSearch();
+      setJobs(searchResults);
+    } catch (error) {
+      console.error('Search failed:', error);
+      alert('Search failed. Please try again.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  const handleJobClick = (job: Job) => {
+    setSelectedJob(job);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedJob(null);
+  };
+
+  const handleJobSelection = (jobId: string, selected: boolean) => {
+    setSelectedJobs(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(jobId);
+      } else {
+        newSet.delete(jobId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedJobs.size === jobs.length) {
+      // Deselect all
+      setSelectedJobs(new Set());
+    } else {
+      // Select all
+      setSelectedJobs(new Set(jobs.map(job => job.id)));
+    }
+  };
+
+  const handleTailorResumes = async () => {
+    if (selectedJobs.size === 0) {
+      alert('Please select at least one job to tailor your resume for.');
+      return;
+    }
+
+    setIsTailoring(true);
+    
+    try {
+      // Get the selected job objects
+      const selectedJobsData = jobs.filter(job => selectedJobs.has(job.id));
+      
+      // Store selected jobs to backend
+      console.log('Storing selected jobs to backend...');
+      await storeSelectedJobsToBackend(selectedJobsData);
+      
+      // Simulate resume tailoring process
+      console.log('Starting resume tailoring process...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Navigate to tailoring tab with selected jobs
+      onJobsTailored(selectedJobsData);
+      
+    } catch (error) {
+      console.error('Resume tailoring failed:', error);
+      alert('❌ Failed to store jobs or start resume tailoring. Please try again.');
+    } finally {
+      setIsTailoring(false);
+    }
+  };
+
+  const TailorButton = ({ className = "" }: { className?: string }) => (
+    <button
+      onClick={handleTailorResumes}
+      disabled={selectedJobs.size === 0 || isTailoring}
+      className={`inline-flex items-center space-x-3 px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-200 ${
+        selectedJobs.size === 0 || isTailoring
+          ? 'bg-gray-400 cursor-not-allowed text-white'
+          : 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl'
+      } ${className}`}
+    >
+      {isTailoring ? (
+        <>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+          <span>Processing & Storing Jobs...</span>
+        </>
+      ) : (
+        <>
+          <Target className="h-5 w-5" />
+          <span>Tailor Resumes for Selected Jobs ({selectedJobs.size})</span>
+        </>
+      )}
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            LinkedIn Job Search
+          </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Find your next opportunity with our intelligent job search powered by LinkedIn data
+          </p>
+        </div>
+
+        {/* Search Form */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            {/* Job Title */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Job Title *
+              </label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchParams.jobTitle}
+                  onChange={(e) => handleInputChange('jobTitle', e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="e.g. Software Engineer"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Location
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchParams.location}
+                  onChange={(e) => handleInputChange('location', e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="e.g. San Francisco, CA"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Date Posted */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Date Posted
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <select
+                  value={searchParams.datePosted}
+                  onChange={(e) => handleInputChange('datePosted', e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none bg-white"
+                >
+                  {dateOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Proxy Toggle */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <Globe className="h-5 w-5 text-gray-600" />
+                <span className="font-semibold text-gray-700">Use Proxy</span>
+              </div>
+              <button
+                onClick={() => setUseProxy(!useProxy)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  useProxy ? 'bg-blue-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    useProxy ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {useProxy && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Proxy URL
+                </label>
+                <div className="relative">
+                  <Settings className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={proxyUrl}
+                    onChange={(e) => setProxyUrl(e.target.value)}
+                    placeholder="http://proxy-server:port"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Search Button */}
+          <div className="text-center">
+            <button
+              onClick={handleSearch}
+              disabled={isSearching}
+              className={`inline-flex items-center space-x-3 px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-200 ${
+                isSearching
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl'
+              }`}
+            >
+              {isSearching ? (
+                <>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  <span>Searching LinkedIn Jobs...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="h-5 w-5" />
+                  <span>Search Jobs</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Search Results */}
+        {searchPerformed && (
+          <div className="space-y-6">
+            {jobs.length > 0 ? (
+              <>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div className="flex items-center space-x-4">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      Search Results ({jobs.length} jobs found)
+                    </h2>
+                    <div className="text-sm text-gray-600">
+                      Showing results for "{searchParams.jobTitle}"
+                      {searchParams.location && ` in ${searchParams.location}`}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={handleSelectAll}
+                      className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                    >
+                      {selectedJobs.size === jobs.length ? (
+                        <CheckSquare className="h-4 w-4" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                      <span>
+                        {selectedJobs.size === jobs.length ? 'Deselect All' : 'Select All'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Top Tailor Button */}
+                <div className="text-center">
+                  <TailorButton />
+                </div>
+                
+                <div className="grid grid-cols-1 gap-6">
+                  {jobs.map(job => (
+                    <JobCard 
+                      key={job.id} 
+                      job={job} 
+                      onClick={() => handleJobClick(job)}
+                      isSelected={selectedJobs.has(job.id)}
+                      onSelectionChange={handleJobSelection}
+                    />
+                  ))}
+                </div>
+
+                {/* Bottom Tailor Button */}
+                <div className="text-center pt-6 border-t border-gray-200">
+                  <TailorButton />
+                </div>
+              </>
+            ) : !isSearching ? (
+              <div className="text-center py-12">
+                <div className="bg-white rounded-lg shadow-md p-8">
+                  <Search className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No jobs found</h3>
+                  <p className="text-gray-600">
+                    Try adjusting your search criteria or search terms
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Job Details Modal */}
+      {selectedJob && (
+        <JobDetailsModal
+          job={selectedJob}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
+      )}
+    </div>
+  );
+};
