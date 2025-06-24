@@ -26,7 +26,7 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
   const [searchParams, setSearchParams] = useState({
     jobTitle: '',
     location: '',
-    datePosted: 'any'
+    datePosted: '7' // Default to "Past week"
   });
   const [useProxy, setUseProxy] = useState(false);
   const [proxyUrl, setProxyUrl] = useState('');
@@ -52,79 +52,50 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
     }));
   };
 
-  const simulateJobSearch = async (): Promise<Job[]> => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Mock job data - in real implementation, this would come from LinkedIn API
-    const mockJobs: Job[] = [
-      {
-        id: '1',
-        title: searchParams.jobTitle || 'Software Engineer',
-        company: 'TechCorp Inc.',
-        location: searchParams.location || 'San Francisco, CA',
-        postedDate: '2 days ago',
-        description: 'We are looking for a talented software engineer to join our growing team. You will be responsible for developing scalable web applications using modern technologies like React, Node.js, and cloud platforms. This role offers excellent growth opportunities and the chance to work on cutting-edge projects that impact millions of users worldwide.',
-        employmentType: 'Full-time',
-        experienceLevel: 'Mid-Senior level',
-        salary: '$120,000 - $180,000',
-        linkedinUrl: 'https://linkedin.com/jobs/view/123456',
-        applicants: 47
-      },
-      {
-        id: '2',
-        title: searchParams.jobTitle || 'Senior Frontend Developer',
-        company: 'InnovateLabs',
-        location: searchParams.location || 'New York, NY',
-        postedDate: '1 week ago',
-        description: 'Join our frontend team to build amazing user experiences that delight our customers. We work with React, TypeScript, and modern web technologies to create products used by millions. You\'ll collaborate with designers, product managers, and backend engineers to deliver high-quality features.',
-        employmentType: 'Full-time',
-        experienceLevel: 'Senior level',
-        salary: '$140,000 - $200,000',
-        linkedinUrl: 'https://linkedin.com/jobs/view/789012',
-        applicants: 23
-      },
-      {
-        id: '3',
-        title: searchParams.jobTitle || 'Product Manager',
-        company: 'StartupXYZ',
-        location: searchParams.location || 'Austin, TX',
-        postedDate: '3 days ago',
-        description: 'Lead product strategy and work cross-functionally with engineering, design, and business teams to deliver exceptional products that delight our customers. You\'ll be responsible for defining product roadmaps, gathering requirements, and ensuring successful product launches.',
-        employmentType: 'Full-time',
-        experienceLevel: 'Mid-Senior level',
-        linkedinUrl: 'https://linkedin.com/jobs/view/345678',
-        applicants: 89
-      },
-      {
-        id: '4',
-        title: searchParams.jobTitle || 'Data Scientist',
-        company: 'DataDriven Co.',
-        location: searchParams.location || 'Seattle, WA',
-        postedDate: '5 days ago',
-        description: 'Apply machine learning and statistical analysis to solve complex business problems. Work with large datasets, build predictive models, and collaborate with cross-functional teams to drive data-informed decision making across the organization.',
-        employmentType: 'Full-time',
-        experienceLevel: 'Senior level',
-        salary: '$130,000 - $190,000',
-        linkedinUrl: 'https://linkedin.com/jobs/view/901234',
-        applicants: 156
-      },
-      {
-        id: '5',
-        title: searchParams.jobTitle || 'UX Designer',
-        company: 'DesignStudio',
-        location: searchParams.location || 'Los Angeles, CA',
-        postedDate: '1 day ago',
-        description: 'Create intuitive and beautiful user experiences for our digital products. Collaborate with product managers, engineers, and other designers to bring innovative design solutions to life. You\'ll conduct user research, create wireframes and prototypes, and ensure our products are accessible and user-friendly.',
-        employmentType: 'Full-time',
-        experienceLevel: 'Mid level',
-        salary: '$90,000 - $130,000',
-        linkedinUrl: 'https://linkedin.com/jobs/view/567890',
-        applicants: 34
-      }
-    ];
+  const searchJobsFromBackend = async (): Promise<Job[]> => {
+    try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        query: searchParams.jobTitle,
+        location: searchParams.location,
+        limit: '20'
+      });
 
-    return mockJobs;
+      // Add proxy parameter if enabled
+      if (useProxy && proxyUrl.trim()) {
+        params.append('proxy', proxyUrl);
+      }
+
+      // Make API call to backend
+      const response = await fetch(`http://localhost:8000/api/search?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform backend response to match our Job interface
+      const transformedJobs: Job[] = data.jobs.map((job: any, index: number) => ({
+        id: job.id || `job_${index}`,
+        title: job.title || job.Title || 'Unknown Title',
+        company: job.company || job.Company || 'Unknown Company',
+        location: job.location || job.Location || 'Unknown Location',
+        postedDate: job.posted_date || job.postedDate || job['Posted Date'] || 'Recently',
+        description: job.description || job.Description || 'No description available',
+        employmentType: job.employment_type || job.employmentType || job['Employment Type'] || 'Full-time',
+        experienceLevel: job.experience_level || job.experienceLevel || job['Experience Level'] || 'Not specified',
+        salary: job.salary || job.Salary || undefined,
+        linkedinUrl: job.linkedin_url || job.linkedinUrl || job['LinkedIn URL'] || job.url || '#',
+        companyLogo: job.company_logo || job.companyLogo || undefined,
+        applicants: job.applicants || job.Applicants || undefined
+      }));
+
+      return transformedJobs;
+    } catch (error) {
+      console.error('Job search API error:', error);
+      throw error;
+    }
   };
 
   const storeSelectedJobsToBackend = async (selectedJobsData: Job[]) => {
@@ -173,6 +144,11 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
       return;
     }
 
+    if (!searchParams.location.trim()) {
+      alert('Please enter a location');
+      return;
+    }
+
     if (useProxy && !proxyUrl.trim()) {
       alert('Please enter a proxy URL');
       return;
@@ -186,11 +162,12 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
       console.log('Searching with params:', searchParams);
       console.log('Using proxy:', useProxy ? proxyUrl : 'No proxy');
       
-      const searchResults = await simulateJobSearch();
+      const searchResults = await searchJobsFromBackend();
       setJobs(searchResults);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search failed:', error);
-      alert('Search failed. Please try again.');
+      const errorMessage = error.message || 'Search failed. Please try again.';
+      alert(`Job search failed: ${errorMessage}`);
     } finally {
       setIsSearching(false);
     }
@@ -326,7 +303,7 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
             {/* Location */}
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">
-                Location
+                Location *
               </label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />

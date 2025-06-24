@@ -3,6 +3,7 @@ import { Navigation } from './components/Navigation';
 import { LandingPage } from './components/LandingPage';
 import { JobSearch } from './components/JobSearch';
 import { ResumeTailoring } from './components/ResumeTailoring';
+import { ResumeDetails } from './components/ResumeDetails';
 
 interface Job {
   id: string;
@@ -90,6 +91,10 @@ function App() {
     setActiveTab('search');
   };
 
+  const handleNavigateToJobSearch = () => {
+    setActiveTab('search');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'landing':
@@ -103,31 +108,12 @@ function App() {
         );
       case 'details':
         return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center max-w-4xl mx-auto p-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Resume Details</h2>
-              {uploadedFile && (
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                  <p className="text-lg text-gray-700 mb-2">
-                    Successfully processed: <span className="font-semibold text-blue-600">{uploadedFile.name}</span>
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    File size: {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              )}
-              {extractedData ? (
-                <div className="bg-white p-6 rounded-lg shadow-md text-left">
-                  <h3 className="text-xl font-bold mb-4">Extracted Data</h3>
-                  <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
-                    {JSON.stringify(extractedData, null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <p className="text-gray-600">No extracted data to show.</p>
-              )}
-            </div>
-          </div>
+          <ResumeDetails 
+            extractedData={extractedData}
+            uploadedFile={uploadedFile}
+            resumeId={resumeId}
+            onNavigateToJobSearch={handleNavigateToJobSearch}
+          />
         );
       case 'search':
         return <JobSearch onJobsTailored={handleJobsTailored} />;
