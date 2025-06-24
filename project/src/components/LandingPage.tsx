@@ -3,7 +3,7 @@ import { FileUpload } from './FileUpload';
 import { Zap, Brain, Target, CheckCircle, ArrowRight } from 'lucide-react';
 
 interface LandingPageProps {
-  onFileUpload: (file: File) => void;
+  onFileUpload: (file: File, resumeId: string) => void;
   uploadedFile: File | null;
   onExtractDetails: () => void;
   isExtracting: boolean;

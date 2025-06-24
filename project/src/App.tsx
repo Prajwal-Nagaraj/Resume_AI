@@ -22,77 +22,60 @@ interface Job {
 function App() {
   const [activeTab, setActiveTab] = useState('landing');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [resumeId, setResumeId] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [selectedJobsForTailoring, setSelectedJobsForTailoring] = useState<Job[]>([]);
+  const [extractedData, setExtractedData] = useState<any | null>(null);
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = (file: File, resumeId: string) => {
     setUploadedFile(file);
-    console.log('File uploaded:', file.name);
-  };
-
-  const saveFileToResumesFolder = async (file: File): Promise<void> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      // Create a timestamp for unique filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `resume_${timestamp}.${fileExtension}`;
-      
-      // Convert file to base64 for storage
-      const reader = new FileReader();
-      return new Promise((resolve, reject) => {
-        reader.onload = async () => {
-          try {
-            const base64Data = reader.result as string;
-            const response = await fetch('/api/save-resume', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                fileName,
-                fileData: base64Data,
-                originalName: file.name
-              })
-            });
-            
-            if (!response.ok) {
-              throw new Error('Failed to save file');
-            }
-            
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    } catch (error) {
-      console.error('Error saving file:', error);
-      throw error;
-    }
+    setResumeId(resumeId);
+    console.log('File uploaded:', file.name, 'Resume ID:', resumeId);
   };
 
   const handleExtractDetails = async () => {
-    if (!uploadedFile) return;
-    
+    if (!resumeId) return;
+
     setIsExtracting(true);
-    
+    setExtractedData(null);
+
     try {
-      // Simulate file processing and saving
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // In a real application, you would save the file to the server here
-      // For now, we'll simulate the process
-      console.log('Saving file to resumes folder:', uploadedFile.name);
-      
+      // 1. Start extraction
+      const startResponse = await fetch(`http://localhost:8000/api/extract/${resumeId}`, {
+        method: 'POST',
+      });
+
+      if (!startResponse.ok) {
+        throw new Error('Failed to start extraction process.');
+      }
+
+      // 2. Poll for status
+      const poll = async (): Promise<any> => {
+        const statusResponse = await fetch(`http://localhost:8000/api/extract/${resumeId}/status`);
+        if (!statusResponse.ok) {
+          throw new Error('Failed to get extraction status.');
+        }
+        const statusData = await statusResponse.json();
+
+        if (statusData.status === 'completed') {
+          return statusData.extracted_data;
+        } else if (statusData.status === 'failed') {
+          throw new Error(statusData.error_message || 'Extraction failed.');
+        } else {
+          // It's still processing, wait and poll again
+          await new Promise(resolve => setTimeout(resolve, 2000)); // wait 2 seconds
+          return await poll();
+        }
+      };
+
+      const data = await poll();
+      setExtractedData(data);
+
       // Navigate to Resume Details tab
       setActiveTab('details');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error extracting resume details:', error);
+      alert(`Extraction failed: ${error.message}`);
     } finally {
       setIsExtracting(false);
     }
@@ -121,7 +104,7 @@ function App() {
       case 'details':
         return (
           <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center max-w-2xl mx-auto p-8">
+            <div className="text-center max-w-4xl mx-auto p-8">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">Resume Details</h2>
               {uploadedFile && (
                 <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -133,7 +116,16 @@ function App() {
                   </p>
                 </div>
               )}
-              <p className="text-gray-600">Resume details extraction and analysis coming soon...</p>
+              {extractedData ? (
+                <div className="bg-white p-6 rounded-lg shadow-md text-left">
+                  <h3 className="text-xl font-bold mb-4">Extracted Data</h3>
+                  <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
+                    {JSON.stringify(extractedData, null, 2)}
+                  </pre>
+                </div>
+              ) : (
+                <p className="text-gray-600">No extracted data to show.</p>
+              )}
             </div>
           </div>
         );

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Upload, FileText, Check, AlertCircle, X } from 'lucide-react';
 
 interface FileUploadProps {
-  onFileUpload: (file: File) => void;
+  onFileUpload: (file: File, resumeId: string) => void;
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
@@ -34,35 +34,56 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
     return true;
   };
 
-  const simulateUpload = (file: File) => {
-    setUploadStatus('uploading');
-    setUploadProgress(0);
-    
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploadStatus('success');
-          setUploadedFile(file);
-          onFileUpload(file);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
-  };
-
-  const handleFileSelect = useCallback((file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     setErrorMessage('');
     setUploadStatus('idle');
     setUploadProgress(0);
 
-    if (validateFile(file)) {
-      simulateUpload(file);
-    } else {
+    if (!validateFile(file)) {
       setUploadStatus('error');
+      return;
     }
-  }, []);
+    
+    setUploadStatus('uploading');
+    setUploadedFile(file);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Simulate progress for better UX as fetch doesn't support upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      const response = await fetch('http://localhost:8000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Upload failed with status ' + response.status }));
+        throw new Error(errorData.detail || 'Upload failed');
+      }
+
+      const result = await response.json();
+      setUploadProgress(100);
+      setUploadStatus('success');
+      onFileUpload(file, result.resume_id);
+
+    } catch (error: any) {
+      setUploadStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred during upload.');
+      setUploadProgress(0);
+    }
+  }, [onFileUpload]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
