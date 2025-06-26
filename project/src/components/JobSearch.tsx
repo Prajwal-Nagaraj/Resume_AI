@@ -16,6 +16,9 @@ interface Job {
   linkedinUrl: string;
   companyLogo?: string;
   applicants?: number;
+  industry?: string;
+  companySize?: string;
+  skills?: string;
 }
 
 interface JobSearchProps {
@@ -81,14 +84,17 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
         title: job.title || job.Title || 'Unknown Title',
         company: job.company || job.Company || 'Unknown Company',
         location: job.location || job.Location || 'Unknown Location',
-        postedDate: job.posted_date || job.postedDate || job['Posted Date'] || 'Recently',
+        postedDate: job.date_posted || job.posted_date || job.postedDate || job['Posted Date'] || 'Recently',
         description: job.description || job.Description || 'No description available',
-        employmentType: job.employment_type || job.employmentType || job['Employment Type'] || 'Full-time',
-        experienceLevel: job.experience_level || job.experienceLevel || job['Experience Level'] || 'Not specified',
-        salary: job.salary || job.Salary || undefined,
-        linkedinUrl: job.linkedin_url || job.linkedinUrl || job['LinkedIn URL'] || job.url || '#',
+        employmentType: job.job_type || job.employment_type || job.employmentType || job['Employment Type'] || 'Full-time',
+        experienceLevel: job.job_level || job.experience_level || job.experienceLevel || job['Experience Level'] || 'Not specified',
+        salary: job.min_amount && job.max_amount ? `$${job.min_amount/1000}k - $${job.max_amount/1000}k` : (job.salary || job.Salary || undefined),
+        linkedinUrl: job.job_url || job.linkedin_url || job.linkedinUrl || job['LinkedIn URL'] || job.url || '#',
         companyLogo: job.company_logo || job.companyLogo || undefined,
-        applicants: job.applicants || job.Applicants || undefined
+        applicants: job.applicants || job.Applicants || undefined,
+        industry: job.company_industry || undefined,
+        companySize: job.company_num_employees || undefined,
+        skills: job.skills || undefined,
       }));
 
       return transformedJobs;
