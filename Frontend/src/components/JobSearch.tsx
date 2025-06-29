@@ -23,9 +23,10 @@ interface Job {
 
 interface JobSearchProps {
   onJobsTailored: (jobs: Job[]) => void;
+  resumeId: string | null;
 }
 
-export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
+export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }) => {
   const [searchParams, setSearchParams] = useState({
     jobTitle: '',
     location: '',
@@ -104,25 +105,40 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
     }
   };
 
-  const storeSelectedJobsToBackend = async (selectedJobsData: Job[]) => {
+  const tailorResumeWithBackend = async (selectedJobsData: Job[]) => {
     try {
+      if (!resumeId) {
+        throw new Error('No resume uploaded. Please upload a resume first.');
+      }
+
+      // Transform jobs data to match backend expected format
+      const jobDescriptions = selectedJobsData.map(job => ({
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description: job.description,
+        requirements: [], // You might want to extract this from the job description
+        preferred_skills: [], // You might want to extract this from the job description
+        employment_type: job.employmentType,
+        experience_level: job.experienceLevel,
+        salary: job.salary,
+        linkedin_url: job.linkedinUrl,
+        posted_date: job.postedDate,
+        applicants: job.applicants,
+        industry: job.industry,
+        company_size: job.companySize,
+        skills: job.skills
+      }));
+
       const payload = {
-        timestamp: new Date().toISOString(),
-        searchParams: searchParams,
-        selectedJobs: selectedJobsData,
-        totalJobsFound: jobs.length,
-        selectionCount: selectedJobsData.length,
-        metadata: {
-          userAgent: navigator.userAgent,
-          searchId: `search_${Date.now()}`,
-          proxyUsed: useProxy,
-          proxyUrl: useProxy ? proxyUrl : null
-        }
+        resume_id: resumeId,
+        job_descriptions: jobDescriptions
       };
 
-      console.log('Sending selected jobs to backend:', payload);
+      console.log('Sending tailoring request to backend:', payload);
 
-      const response = await fetch('/api/store-selected-jobs', {
+      const response = await fetch('http://localhost:8000/api/tailor', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,15 +147,16 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('Backend response:', result);
+      console.log('Backend tailoring response:', result);
       
       return result;
     } catch (error) {
-      console.error('Error storing selected jobs to backend:', error);
+      console.error('Error tailoring resume with backend:', error);
       throw error;
     }
   };
@@ -223,26 +240,34 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
       return;
     }
 
+    if (!resumeId) {
+      alert('Please upload and extract a resume first before tailoring.');
+      return;
+    }
+
     setIsTailoring(true);
     
     try {
       // Get the selected job objects
       const selectedJobsData = jobs.filter(job => selectedJobs.has(job.id));
       
-      // Store selected jobs to backend
-      console.log('Storing selected jobs to backend...');
-      await storeSelectedJobsToBackend(selectedJobsData);
-      
-      // Simulate resume tailoring process
+      // Start resume tailoring process with backend
       console.log('Starting resume tailoring process...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const tailoringResult = await tailorResumeWithBackend(selectedJobsData);
       
-      // Navigate to tailoring tab with selected jobs
-      onJobsTailored(selectedJobsData);
+      if (tailoringResult.task_id) {
+        console.log('Resume tailoring started with task ID:', tailoringResult.task_id);
+        alert(`✅ Resume tailoring started successfully! Task ID: ${tailoringResult.task_id}\n\nYou can check the status in the tailoring tab.`);
+        
+        // Navigate to tailoring tab with selected jobs
+        onJobsTailored(selectedJobsData);
+      } else {
+        throw new Error('No task ID received from backend');
+      }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Resume tailoring failed:', error);
-      alert('❌ Failed to store jobs or start resume tailoring. Please try again.');
+      alert(`❌ Failed to start resume tailoring: ${error.message}`);
     } finally {
       setIsTailoring(false);
     }
@@ -251,9 +276,9 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
   const TailorButton = ({ className = "" }: { className?: string }) => (
     <button
       onClick={handleTailorResumes}
-      disabled={selectedJobs.size === 0 || isTailoring}
+      disabled={selectedJobs.size === 0 || isTailoring || !resumeId}
       className={`inline-flex items-center space-x-3 px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-200 ${
-        selectedJobs.size === 0 || isTailoring
+        selectedJobs.size === 0 || isTailoring || !resumeId
           ? 'bg-gray-400 cursor-not-allowed text-white'
           : 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl'
       } ${className}`}
@@ -266,7 +291,14 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored }) => {
       ) : (
         <>
           <Target className="h-5 w-5" />
-          <span>Tailor Resumes for Selected Jobs ({selectedJobs.size})</span>
+          <span>
+            {!resumeId 
+              ? 'Upload Resume First' 
+              : selectedJobs.size === 0 
+                ? 'Select Jobs to Tailor Resume'
+                : `Tailor Resume for Selected Jobs (${selectedJobs.size})`
+            }
+          </span>
         </>
       )}
     </button>

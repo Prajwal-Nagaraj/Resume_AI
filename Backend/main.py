@@ -14,7 +14,7 @@ from pydantic import BaseModel
 # Import existing modules
 from jobs_scraper import SpeedyApplyTool
 from resume_parser_agent import parse_resume_raw_json
-# from resume_tailor_agent import ResumeTailorAgent, JobDescription
+from resume_tailor_agent import ResumeTailorAgent, JobDescription
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -34,7 +34,7 @@ app.add_middleware(
 
 # Initialize tools and agents
 job_scraper = SpeedyApplyTool()
-# resume_tailor_agent = ResumeTailorAgent()
+resume_tailor_agent = ResumeTailorAgent()
 
 # Storage directories
 UPLOAD_DIR = Path("uploads")
@@ -80,6 +80,9 @@ class TailorStatusResponse(BaseModel):
     tailored_resumes: Optional[List[Dict]] = None
     download_links: Optional[List[str]] = None
     error_message: Optional[str] = None
+
+class UpdatedResume(BaseModel):
+    data: Dict[str, Any]
 
 # API Endpoints
 
@@ -230,6 +233,21 @@ async def get_extraction_status(resume_id: str):
         extracted_data=status_data["extracted_data"],
         error_message=status_data["error_message"]
     )
+
+@app.put("/api/resume/{resume_id}")
+async def update_resume_data(resume_id: str, updated_data: Dict[str, Any]):
+    """
+    Update extracted resume data
+    """
+    if resume_id not in extraction_status:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    if extraction_status[resume_id]["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Resume extraction not complete, cannot update.")
+
+    extraction_status[resume_id]["extracted_data"] = updated_data
+    
+    return {"message": "Resume data updated successfully"}
 
 @app.post("/api/tailor", response_model=TailorResponse)
 async def tailor_resume(request: TailorRequest, background_tasks: BackgroundTasks):

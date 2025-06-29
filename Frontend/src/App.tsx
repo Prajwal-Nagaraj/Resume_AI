@@ -116,7 +116,7 @@ function App() {
           />
         );
       case 'search':
-        return <JobSearch onJobsTailored={handleJobsTailored} />;
+        return <JobSearch onJobsTailored={handleJobsTailored} resumeId={resumeId} />;
       case 'tailoring':
         return (
           <ResumeTailoring 
