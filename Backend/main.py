@@ -14,7 +14,7 @@ from pydantic import BaseModel
 # Import existing modules
 from jobs_scraper import SpeedyApplyTool
 from resume_parser_agent import parse_resume_raw_json
-from resume_tailor_agent import ResumeTailorAgent, JobDescription
+from resume_tailor_agent import tailor_resume as tailor_resume_with_ai
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -34,7 +34,6 @@ app.add_middleware(
 
 # Initialize tools and agents
 job_scraper = SpeedyApplyTool()
-resume_tailor_agent = ResumeTailorAgent()
 
 # Storage directories
 UPLOAD_DIR = Path("uploads")
@@ -112,6 +111,9 @@ async def search_jobs(
     Search for job listings using the job scraper
     """
     try:
+        # The proxy parameter is automatically URL-decoded by FastAPI.
+        # No need for extra decoding.
+        
         # Use the existing job scraper
         filename = job_scraper.find_and_save_jobs(search_term=query, location=location, proxy_url=proxy)
         
@@ -377,34 +379,24 @@ async def perform_tailoring(task_id: str):
         
         for i, job_desc_data in enumerate(job_descriptions):
             try:
-                # Create JobDescription object
-                job_desc = JobDescription(
-                    title=job_desc_data.get("title", "Unknown Title"),
-                    company=job_desc_data.get("company", "Unknown Company"),
-                    location=job_desc_data.get("location"),
-                    description=job_desc_data.get("description", ""),
-                    requirements=job_desc_data.get("requirements", []),
-                    preferred_skills=job_desc_data.get("preferred_skills", [])
-                )
-                
                 # Tailor resume for this job
-                tailored_content = await resume_tailor_agent.tailor_resume(resume_data, job_desc)
+                tailored_content = await tailor_resume_with_ai(resume_data, job_desc_data)
                 
                 if tailored_content:
                     # Generate filename for tailored resume
-                    safe_company = "".join(c for c in job_desc.company if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    safe_title = "".join(c for c in job_desc.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    safe_company = "".join(c for c in job_desc_data.get("company", "Unknown") if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    safe_title = "".join(c for c in job_desc_data.get("title", "Unknown") if c.isalnum() or c in (' ', '-', '_')).rstrip()
                     filename = f"{resume_id}_{safe_company}_{safe_title}_{i}.json"
                     
                     # Save tailored resume as JSON
                     file_path = TAILORED_RESUMES_DIR / filename
                     with open(file_path, 'w') as f:
-                        json.dump(tailored_content.dict(), f, indent=2)
+                        json.dump(tailored_content, f, indent=2)
                     
                     tailored_resumes.append({
-                        "job_title": job_desc.title,
-                        "company": job_desc.company,
-                        "tailored_content": tailored_content.dict(),
+                        "job_title": job_desc_data.get("title", "Unknown Title"),
+                        "company": job_desc_data.get("company", "Unknown Company"),
+                        "tailored_content": tailored_content,
                         "filename": filename
                     })
                     

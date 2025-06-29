@@ -64,14 +64,9 @@ if __name__ == "__main__":
     job_location = "New York, USA"
     time_days = 7  # Search for jobs posted in the last 7 days
     
-    saved_filename = tool.find_and_save_jobs(search_term=search_query, location=job_location, time_days=time_days)
+    saved_filename = tool.find_and_save_jobs(search_term=search_query, location=job_location, time_days=time_days, proxy_url="https://spm7e96ly4:Pl=r66vUAut2asdwE0@gate.decodo.com:10001")
     
     if saved_filename:
         print(f"Process completed. Job data saved to: {saved_filename}")
-        # To integrate with Agno, you would typically add this tool to an Agent:
-        # from agno.agent import Agent
-        # agent = Agent(tools=[SpeedyApplyTool()])
-        # response = agent.run(f"Find {search_query} jobs in {job_location}") 
-        # print(response)
     else:
         print("Process completed. No job data was saved.")
