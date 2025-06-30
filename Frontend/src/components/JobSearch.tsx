@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, Calendar, Globe, Settings, Briefcase, Target, CheckSquare, Square } from 'lucide-react';
+import { Search, MapPin, Calendar, Globe, Settings, Briefcase, Target, CheckSquare, Square, Hash } from 'lucide-react';
 import { JobCard } from './JobCard';
 import { JobDetailsModal } from './JobDetailsModal';
 
@@ -30,7 +30,8 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
   const [searchParams, setSearchParams] = useState({
     jobTitle: '',
     location: '',
-    datePosted: '7' // Default to "Past week"
+    datePosted: '7', // Default to "Past week"
+    resultsCount: '20' // Default to 20 jobs
   });
   const [useProxy, setUseProxy] = useState(false);
   const [proxyUrl, setProxyUrl] = useState('');
@@ -62,7 +63,7 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
       const params = new URLSearchParams({
         query: searchParams.jobTitle,
         location: searchParams.location,
-        limit: '20'
+        limit: searchParams.resultsCount
       });
 
       // Add proxy parameter if enabled
@@ -177,6 +178,12 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
       return;
     }
 
+    const resultsCount = parseInt(searchParams.resultsCount);
+    if (isNaN(resultsCount) || resultsCount < 1 || resultsCount > 500) {
+      alert('Please enter a valid number of jobs between 1 and 500');
+      return;
+    }
+
     setIsSearching(true);
     setSearchPerformed(true);
     setSelectedJobs(new Set()); // Clear previous selections
@@ -184,6 +191,7 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
     try {
       console.log('Searching with params:', searchParams);
       console.log('Using proxy:', useProxy ? proxyUrl : 'No proxy');
+      console.log('Requesting', searchParams.resultsCount, 'jobs');
       
       const searchResults = await searchJobsFromBackend();
       setJobs(searchResults);
@@ -319,7 +327,7 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
 
         {/* Search Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             {/* Job Title */}
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">
@@ -374,6 +382,26 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* Number of Results */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Number of Jobs
+              </label>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={searchParams.resultsCount}
+                  onChange={(e) => handleInputChange('resultsCount', e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="e.g. 20"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                />
               </div>
             </div>
           </div>

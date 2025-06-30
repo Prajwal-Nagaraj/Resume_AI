@@ -9,7 +9,7 @@ from agno.models.ollama import Ollama
 
 
 
-def create_resume_tailor_agent(model_name: str = "llama3.2:latest") -> Agent:
+def create_resume_tailor_agent(model_name: str = "gemma3:4b") -> Agent:
     """
     Creates and returns a resume tailor agent using Ollama.
     
@@ -31,15 +31,16 @@ def create_resume_tailor_agent(model_name: str = "llama3.2:latest") -> Agent:
         instructions=dedent("""\
             You will receive a user's resume in JSON format and a job description text. 
             Your goal is to revise the resume to maximize its chances of passing an ATS scan 
-            and impressing a human recruiter for this specific job.
+            and impressing a human recruiter for this specific job. You must only output the JSON object and nothing else.
 
             CRITICAL RULES:
             1. NO FABRICATION: You must NEVER invent, exaggerate, or falsify any information. 
                All tailored content must be based on the experience and skills present in the original resume. 
                You are reframing, not inventing.
-            2. JSON-IN, JSON-OUT: Your final output must be ONLY the tailored resume in a single, valid JSON object, 
-               maintaining the same structure as the input resume. Do not include any explanatory text, markdown, 
-               or apologies outside of the JSON block.
+            2. MANDATORY JSON-ONLY OUTPUT: Your response must be ONLY a valid JSON object
+               - NO markdown formatting, NO code blocks
+               - The first character must be { and the last character must be }
+               - Maintain the exact same structure as the input resume
             3. ATS & HUMAN OPTIMIZATION: The resume must be rich in keywords from the job description but also 
                well-written, professional, and achievement-oriented for human readers.
             4. PRESERVE STRUCTURE: Keep the same field names and structure as the input resume. If the input has 
@@ -62,7 +63,7 @@ def create_resume_tailor_agent(model_name: str = "llama3.2:latest") -> Agent:
                  2-3 sentence paragraph. It must directly address the key requirements of the job description and 
                  immediately signal that the candidate is a strong fit.
 
-               - Experience/Work History: This is the most critical section. For each role, revise the responsibilities/achievements:
+               - Experience/Work History: This is the most critical section. For each work experience received, revise the responsibilities/achievements:
                  * Start every bullet point with a strong action verb (e.g., "Orchestrated," "Engineered," "Maximized," "Analyzed").
                  * Quantify results wherever possible using numbers and metrics to demonstrate impact. If the original resume 
                    lacks metrics, rephrase to emphasize the outcome of the action.
@@ -70,11 +71,16 @@ def create_resume_tailor_agent(model_name: str = "llama3.2:latest") -> Agent:
                    the user's actual experience.
 
                - Skills: Review the skills section. Ensure it prominently features the key skills identified from the job 
-                 description, provided they are substantiated by the user's experience. Maintain the existing structure 
-                 (list or categorized object).
+                 description, provided they are substantiated by the user's experience. Classify the skills into separate categories that is relevant to the job description.
 
-            CRITICAL: Your response must be ONLY a valid JSON object maintaining the exact same structure as the input resume. 
-            No explanations, markdown formatting, or additional text.
+            ABSOLUTE FINAL REQUIREMENT - PURE JSON ONLY:
+            Your response must be ONLY a valid JSON object. This is mandatory and non-negotiable.
+            - Begin with { and end with }
+            - NO text before the JSON, NO text after the JSON
+            - NO markdown, NO code blocks, NO backticks
+            - NO explanations, NO apologies, NO comments
+            - Just the raw JSON object and absolutely nothing else
+            - Maintain the exact same structure as the input resume
             """),
         markdown=False,
         show_tool_calls=False,
@@ -203,7 +209,7 @@ async def tailor_resume(resume_data: Dict[str, Any], job_desc: Dict[str, Any], m
     {job_description_text}
     ---
 
-    Return ONLY a valid JSON object with the tailored resume maintaining the same structure as the input resume.
+    CRITICAL: Return ONLY a valid JSON object with the tailored resume. Your response must start with {{ and end with }}. NO other text allowed.
     """
 
     try:

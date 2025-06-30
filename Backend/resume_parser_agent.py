@@ -60,7 +60,13 @@ resume_parser_agent = Agent(
         You will be given the raw text extracted from a resume document.
         Your task is to analyze this text and return a well-structured JSON object with ALL the information you find.
         
-        IMPORTANT: Return ONLY a valid JSON object. Do not include any explanations, markdown formatting, or additional text.
+        CRITICAL JSON-ONLY REQUIREMENT: 
+        - Your response must be ONLY a valid JSON object
+        - NO explanations, NO markdown formatting, NO additional text
+        - NO code blocks, NO backticks, NO ```json``` formatting
+        - NO introductory text, NO concluding text
+        - ONLY the raw JSON object starting with { and ending with }
+        - The first character of your response must be { and the last character must be }
         
         The JSON structure should follow this format (these are just examples - extract ALL actual content):
         {
@@ -132,7 +138,13 @@ resume_parser_agent = Agent(
         If certain information is not present, use null for optional fields or empty arrays for lists.
         Ensure all descriptions are broken down into comprehensive bullet points (arrays of strings).
         
-        CRITICAL: Your response must be valid JSON only. No additional text, explanations, or formatting.
+        ABSOLUTE FINAL REQUIREMENT - JSON ONLY:
+        Your response must be ONLY a valid JSON object. Period. No exceptions.
+        - Start with { and end with }
+        - NO markdown, NO code blocks, NO explanations
+        - NO text before or after the JSON
+        - Just the pure JSON object and nothing else
+        - This is mandatory and non-negotiable
         """),
     # Removed response_model to allow flexible JSON output
     markdown=False, # Disabled markdown to get cleaner JSON output
@@ -204,7 +216,7 @@ async def parse_resume_raw_json(resume_file_path: str) -> Optional[Dict]:
     {resume_text}
     ---
 
-    Return a valid JSON object with all the extracted resume information.
+    CRITICAL: Return ONLY a valid JSON object with all the extracted resume information. Your response must start with {{ and end with }}. NO other text allowed.
     """
     
     try:
