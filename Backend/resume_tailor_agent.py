@@ -9,7 +9,7 @@ from agno.models.ollama import Ollama
 
 
 
-def create_resume_tailor_agent(model_name: str = "gemma3:4b") -> Agent:
+def create_resume_tailor_agent(model_name: str = "gemma3:4b-it-qat") -> Agent:
     """
     Creates and returns a resume tailor agent using Ollama.
     

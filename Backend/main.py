@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from jobs_scraper import SpeedyApplyTool
 from resume_parser_agent import parse_resume_raw_json
 from resume_tailor_agent import tailor_resume as tailor_resume_with_ai
+from pdf_generator_simple import ResumePDFGenerator
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -34,6 +35,7 @@ app.add_middleware(
 
 # Initialize tools and agents
 job_scraper = SpeedyApplyTool()
+pdf_generator = ResumePDFGenerator()
 
 # Storage directories
 UPLOAD_DIR = Path("uploads")
@@ -77,7 +79,7 @@ class TailorStatusResponse(BaseModel):
     task_id: str
     status: str  # "pending", "processing", "completed", "failed"
     tailored_resumes: Optional[List[Dict]] = None
-    download_links: Optional[List[str]] = None
+    download_links: Optional[List[Dict]] = None
     error_message: Optional[str] = None
 
 class UpdatedResume(BaseModel):
@@ -93,10 +95,11 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "search": "/api/search",
-            "upload": "/api/upload",
+            "upload": "/api/upload", 
             "extract": "/api/extract/{resume_id}",
             "tailor": "/api/tailor",
-            "download": "/api/download/{file_key}"
+            "download": "/api/download/{file_key}",
+            "download_pdf": "/api/download/{file_key}/pdf"
         }
     }
 
@@ -313,18 +316,68 @@ async def get_tailoring_status(task_id: str):
 @app.get("/api/download/{file_key}")
 async def download_tailored_resume(file_key: str):
     """
-    Download a tailored resume file
+    Download a tailored resume file (JSON or PDF)
     """
     file_path = TAILORED_RESUMES_DIR / file_key
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
+    # Determine media type based on file extension
+    if file_key.endswith('.pdf'):
+        media_type = 'application/pdf'
+    elif file_key.endswith('.json'):
+        media_type = 'application/json'
+    else:
+        media_type = 'application/octet-stream'
+    
     return FileResponse(
         path=file_path,
         filename=file_key,
-        media_type='application/octet-stream'
+        media_type=media_type
     )
+
+@app.get("/api/download/{file_key}/pdf")
+async def download_tailored_resume_pdf(file_key: str):
+    """
+    Download a tailored resume as PDF (converts from JSON if needed)
+    """
+    # Remove .json extension if present and add .pdf
+    base_name = file_key.replace('.json', '')
+    pdf_file_key = f"{base_name}.pdf"
+    json_file_key = f"{base_name}.json"
+    
+    pdf_path = TAILORED_RESUMES_DIR / pdf_file_key
+    json_path = TAILORED_RESUMES_DIR / json_file_key
+    
+    # If PDF exists, return it
+    if pdf_path.exists():
+        return FileResponse(
+            path=pdf_path,
+            filename=pdf_file_key,
+            media_type='application/pdf'
+        )
+    
+    # If JSON exists, convert to PDF
+    if json_path.exists():
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                resume_data = json.load(f)
+            
+            # Generate PDF
+            if pdf_generator.generate_pdf(resume_data, str(pdf_path)):
+                return FileResponse(
+                    path=pdf_path,
+                    filename=pdf_file_key,
+                    media_type='application/pdf'
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Failed to generate PDF")
+                
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+    
+    raise HTTPException(status_code=404, detail="Resume file not found")
 
 # Background task functions
 
@@ -386,21 +439,31 @@ async def perform_tailoring(task_id: str):
                     # Generate filename for tailored resume
                     safe_company = "".join(c for c in job_desc_data.get("company", "Unknown") if c.isalnum() or c in (' ', '-', '_')).rstrip()
                     safe_title = "".join(c for c in job_desc_data.get("title", "Unknown") if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    filename = f"{resume_id}_{safe_company}_{safe_title}_{i}.json"
+                    base_filename = f"{resume_id}_{safe_company}_{safe_title}_{i}"
+                    json_filename = f"{base_filename}.json"
+                    pdf_filename = f"{base_filename}.pdf"
                     
                     # Save tailored resume as JSON
-                    file_path = TAILORED_RESUMES_DIR / filename
-                    with open(file_path, 'w') as f:
+                    json_file_path = TAILORED_RESUMES_DIR / json_filename
+                    with open(json_file_path, 'w', encoding='utf-8') as f:
                         json.dump(tailored_content, f, indent=2)
+                    
+                    # Generate PDF version
+                    pdf_file_path = TAILORED_RESUMES_DIR / pdf_filename
+                    pdf_generated = pdf_generator.generate_pdf(tailored_content, str(pdf_file_path))
                     
                     tailored_resumes.append({
                         "job_title": job_desc_data.get("title", "Unknown Title"),
                         "company": job_desc_data.get("company", "Unknown Company"),
                         "tailored_content": tailored_content,
-                        "filename": filename
+                        "json_filename": json_filename,
+                        "pdf_filename": pdf_filename if pdf_generated else None
                     })
                     
-                    download_links.append(f"/api/download/{filename}")
+                    download_links.append({
+                        "json": f"/api/download/{json_filename}",
+                        "pdf": f"/api/download/{pdf_filename}" if pdf_generated else f"/api/download/{json_filename}/pdf"
+                    })
                 
             except Exception as e:
                 print(f"Error tailoring resume for job {i}: {e}")
