@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from textwrap import dedent
 
 from agno.agent import Agent
-from agno.models.ollama import Ollama # Or any other model you prefer, e.g., agno.models.openai.OpenAIChat
+from agno.models.ollama import Ollama # Or any other model you prefer
+
 # Helper function to load resume text from DOCX
 def load_resume_from_docx(file_path: str) -> str:
     """Loads text content from a .docx file."""

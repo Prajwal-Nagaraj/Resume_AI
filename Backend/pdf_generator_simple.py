@@ -109,9 +109,6 @@ class ResumePDFGenerator:
             bool: True if PDF was generated successfully, False otherwise
         """
         try:
-            # Normalize the resume data
-            normalized_data = self._normalize_resume_data(resume_data)
-            
             # Create the PDF document
             doc = SimpleDocTemplate(
                 output_path,
@@ -126,31 +123,31 @@ class ResumePDFGenerator:
             story = []
             
             # Add header
-            self._add_header(story, normalized_data.get('personal_info', {}))
+            self._add_header(story, resume_data.get('contact_info', {}))
             
             # Add professional summary
-            if normalized_data.get('professional_summary'):
-                self._add_professional_summary(story, normalized_data['professional_summary'])
+            if resume_data.get('summary'):
+                self._add_professional_summary(story, resume_data['summary'])
             
             # Add work experience
-            if normalized_data.get('work_experience'):
-                self._add_work_experience(story, normalized_data['work_experience'])
+            if resume_data.get('work_experience'):
+                self._add_work_experience(story, resume_data['work_experience'])
             
             # Add skills
-            if normalized_data.get('skills'):
-                self._add_skills(story, normalized_data['skills'])
+            if resume_data.get('skills'):
+                self._add_skills(story, resume_data['skills'])
             
             # Add education
-            if normalized_data.get('education'):
-                self._add_education(story, normalized_data['education'])
+            if resume_data.get('education'):
+                self._add_education(story, resume_data['education'])
             
             # Add certifications
-            if normalized_data.get('certifications'):
-                self._add_certifications(story, normalized_data['certifications'])
+            if resume_data.get('certifications'):
+                self._add_certifications(story, resume_data['certifications'])
             
             # Add projects
-            if normalized_data.get('projects'):
-                self._add_projects(story, normalized_data['projects'])
+            if resume_data.get('projects'):
+                self._add_projects(story, resume_data['projects'])
             
             # Build the PDF
             doc.build(story)
@@ -160,22 +157,24 @@ class ResumePDFGenerator:
             print(f"Error generating PDF: {e}")
             return False
     
-    def _add_header(self, story: List, personal_info: Dict[str, Any]):
+    def _add_header(self, story: List, contact_info: Dict[str, Any]):
         """Add header with name and contact information"""
         # Name
-        name = personal_info.get('name', 'Your Name')
+        name = contact_info.get('name', 'Your Name')
         story.append(Paragraph(name, self.styles['ResumeTitle']))
         
         # Contact information
         contact_parts = []
-        if personal_info.get('email'):
-            contact_parts.append(personal_info['email'])
-        if personal_info.get('phone'):
-            contact_parts.append(personal_info['phone'])
-        if personal_info.get('location'):
-            contact_parts.append(personal_info['location'])
-        if personal_info.get('linkedin'):
-            contact_parts.append(personal_info['linkedin'])
+        if contact_info.get('email'):
+            contact_parts.append(contact_info['email'])
+        if contact_info.get('phone'):
+            contact_parts.append(contact_info['phone'])
+        if contact_info.get('location'):
+            contact_parts.append(contact_info['location'])
+        if contact_info.get('linkedin'):
+            contact_parts.append(contact_info['linkedin'])
+        if contact_info.get('github'):
+            contact_parts.append(contact_info['github'])
         
         if contact_parts:
             contact_text = ' • '.join(contact_parts)
@@ -193,7 +192,7 @@ class ResumePDFGenerator:
         
         for job in experience:
             # Job title
-            title = job.get('position') or job.get('title', 'Position')
+            title = job.get('title') or job.get('position', 'Position')
             story.append(Paragraph(title, self.styles['JobTitle']))
             
             # Company and dates
@@ -210,7 +209,19 @@ class ResumePDFGenerator:
             
             story.append(Paragraph(company_info, self.styles['CompanyDate']))
             
-            # Responsibilities
+            # Responsibilities/Description
+            if job.get('description'):
+                # Handle description as list of strings
+                if isinstance(job['description'], list):
+                    for responsibility in job['description']:
+                        bullet_text = f"• {responsibility}"
+                        story.append(Paragraph(bullet_text, self.styles['BulletPoint']))
+                else:
+                    # Handle description as string
+                    bullet_text = f"• {job['description']}"
+                    story.append(Paragraph(bullet_text, self.styles['BulletPoint']))
+            
+            # Handle legacy 'responsibilities' field if present
             if job.get('responsibilities'):
                 for responsibility in job['responsibilities']:
                     bullet_text = f"• {responsibility}"
@@ -225,12 +236,13 @@ class ResumePDFGenerator:
         if isinstance(skills, dict):
             # Categorized skills
             for category, skill_list in skills.items():
-                category_text = f"<b>{category}:</b> "
-                if isinstance(skill_list, list):
-                    category_text += ', '.join(skill_list)
-                else:
-                    category_text += str(skill_list)
-                story.append(Paragraph(category_text, self.styles['Skills']))
+                if skill_list:  # Only add non-empty categories
+                    category_text = f"<b>{category}:</b> "
+                    if isinstance(skill_list, list):
+                        category_text += ', '.join(skill_list)
+                    else:
+                        category_text += str(skill_list)
+                    story.append(Paragraph(category_text, self.styles['Skills']))
         elif isinstance(skills, list):
             # Simple skill list
             skills_text = ', '.join(skills)
@@ -243,16 +255,19 @@ class ResumePDFGenerator:
         story.append(Paragraph("EDUCATION", self.styles['SectionHeading']))
         
         for edu in education:
-            # Degree
-            degree = edu.get('degree', 'Degree')
+            # Degree/Title
+            degree = edu.get('degree') or edu.get('title', 'Degree')
             story.append(Paragraph(degree, self.styles['JobTitle']))
             
             # Institution and date
             institution = edu.get('institution') or edu.get('school', 'Institution')
             grad_date = edu.get('graduation_date') or edu.get('end_date', '')
             gpa = edu.get('gpa', '')
+            major = edu.get('major', '')
             
             edu_info = institution
+            if major:
+                edu_info += f" • {major}"
             if grad_date:
                 edu_info += f" • {grad_date}"
             if gpa:
@@ -267,15 +282,18 @@ class ResumePDFGenerator:
         
         for cert in certifications:
             if isinstance(cert, dict):
-                cert_name = cert.get('name', str(cert))
+                cert_name = cert.get('title') or cert.get('name', str(cert))
                 issuer = cert.get('issuer', '')
                 date = cert.get('date', '')
+                description = cert.get('description', '')
                 
                 cert_text = cert_name
                 if issuer:
                     cert_text += f" - {issuer}"
                 if date:
                     cert_text += f" ({date})"
+                if description:
+                    cert_text += f" - {description}"
             else:
                 cert_text = str(cert)
             
@@ -289,86 +307,34 @@ class ResumePDFGenerator:
         
         for project in projects:
             # Project name
-            name = project.get('name') or project.get('title', 'Project')
+            name = project.get('title') or project.get('name', 'Project')
             story.append(Paragraph(name, self.styles['JobTitle']))
             
             # Description
             if project.get('description'):
-                story.append(Paragraph(project['description'], self.styles['Normal']))
+                # Handle description as list of strings
+                if isinstance(project['description'], list):
+                    for desc in project['description']:
+                        story.append(Paragraph(f"• {desc}", self.styles['BulletPoint']))
+                else:
+                    # Handle description as string
+                    story.append(Paragraph(project['description'], self.styles['Normal']))
             
             # Technologies
-            if project.get('technologies'):
-                if isinstance(project['technologies'], list):
-                    tech_text = f"<b>Technologies:</b> {', '.join(project['technologies'])}"
-                else:
-                    tech_text = f"<b>Technologies:</b> {project['technologies']}"
-                story.append(Paragraph(tech_text, self.styles['Skills']))
+            if project.get('technologies_used'):
+                if isinstance(project['technologies_used'], list) and project['technologies_used']:
+                    tech_text = f"<b>Technologies:</b> {', '.join(project['technologies_used'])}"
+                    story.append(Paragraph(tech_text, self.styles['Skills']))
+                elif isinstance(project['technologies_used'], str):
+                    tech_text = f"<b>Technologies:</b> {project['technologies_used']}"
+                    story.append(Paragraph(tech_text, self.styles['Skills']))
+            
+            # URL if available
+            if project.get('url'):
+                url_text = f"<b>URL:</b> {project['url']}"
+                story.append(Paragraph(url_text, self.styles['Skills']))
             
             story.append(Spacer(1, 6))
-    
-    def _normalize_resume_data(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Normalize resume data to handle different field naming conventions
-        
-        Args:
-            resume_data (Dict[str, Any]): Raw resume data
-            
-        Returns:
-            Dict[str, Any]: Normalized resume data
-        """
-        normalized = {}
-        
-        # Handle personal information
-        personal_info = {}
-        for key in ['personal_info', 'personal_information', 'contact', 'header']:
-            if key in resume_data:
-                personal_info.update(resume_data[key])
-                break
-        
-        # Fallback to root level fields
-        if not personal_info:
-            personal_fields = ['name', 'email', 'phone', 'location', 'linkedin', 'address']
-            for field in personal_fields:
-                if field in resume_data:
-                    personal_info[field] = resume_data[field]
-        
-        normalized['personal_info'] = personal_info
-        
-        # Handle professional summary
-        summary_fields = ['professional_summary', 'summary', 'objective', 'about']
-        for field in summary_fields:
-            if field in resume_data:
-                normalized['professional_summary'] = resume_data[field]
-                break
-        
-        # Handle work experience
-        exp_fields = ['work_experience', 'experience', 'employment', 'jobs']
-        for field in exp_fields:
-            if field in resume_data:
-                normalized['work_experience'] = resume_data[field]
-                break
-        
-        # Handle skills
-        skill_fields = ['skills', 'technical_skills', 'competencies']
-        for field in skill_fields:
-            if field in resume_data:
-                normalized['skills'] = resume_data[field]
-                break
-        
-        # Handle education
-        edu_fields = ['education', 'academic', 'qualifications']
-        for field in edu_fields:
-            if field in resume_data:
-                normalized['education'] = resume_data[field]
-                break
-        
-        # Handle other sections
-        other_sections = ['certifications', 'projects', 'achievements', 'awards']
-        for section in other_sections:
-            if section in resume_data:
-                normalized[section] = resume_data[section]
-        
-        return normalized
 
 def create_pdf_from_json(json_file_path: str, output_pdf_path: str) -> bool:
     """
