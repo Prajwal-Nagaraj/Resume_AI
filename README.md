@@ -237,11 +237,8 @@ For support, please open an issue in the GitHub repository or contact the develo
 
 - [ ] Advanced AI model integration
 - [ ] Multiple resume format support
-- [ ] Job application tracking
 - [ ] Cover letter generation
-- [ ] Interview preparation features
-- [ ] Analytics and success metrics
-- [ ] Multi-language support
+- [ ] Perfect resume tailoring prompt
 
 ---
 
