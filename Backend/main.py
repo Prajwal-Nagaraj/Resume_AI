@@ -68,7 +68,7 @@ class ExtractionStatusResponse(BaseModel):
 
 class TailorRequest(BaseModel):
     resume_id: str
-    job_descriptions: List[Dict[str, Any]]  # List of job data from search results
+    job_descriptions: List[Dict[str, str]]  # List of objects with description and company
 
 class TailorResponse(BaseModel):
     task_id: str
@@ -433,7 +433,8 @@ async def perform_tailoring(task_id: str):
         for i, job_desc_data in enumerate(job_descriptions):
             try:
                 # Tailor resume for this job
-                tailored_content = await tailor_resume_with_ai(resume_data, job_desc_data)
+                job_description_text = job_desc_data.get("description", "")
+                tailored_content = await tailor_resume_with_ai(resume_data, job_description_text)
                 
                 if tailored_content:
                     # Generate filename for tailored resume

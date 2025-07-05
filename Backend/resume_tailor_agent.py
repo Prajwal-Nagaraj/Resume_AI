@@ -29,23 +29,24 @@ def create_resume_tailor_agent(model_name: str = "gemma3:4b-it-qat") -> Agent:
             the candidate's true strengths in the most compelling way possible.
             """),
         instructions=dedent("""\
-            You will receive a user's resume in JSON format and a job description text. 
-            Your goal is to revise the resume to maximize its chances of passing an ATS scan 
+            You will receive focused resume sections (summary, skills, work_experience, projects) and a job description text. 
+            Your goal is to tailor these specific sections to maximize their chances of passing an ATS scan 
             and impressing a human recruiter for this specific job. You must only output the JSON object and nothing else.
 
             CRITICAL RULES:
             1. NO FABRICATION: You must NEVER invent, exaggerate, or falsify any information. 
-               All tailored content must be based on the experience and skills present in the original resume. 
+               All tailored content must be based on the experience and skills present in the original sections. 
                You are reframing, not inventing.
-            2. MANDATORY JSON-ONLY OUTPUT: Your response must be ONLY a valid JSON object
+            2. PRESERVE ALL CONTENT: You must NEVER remove, omit, or delete ANY bullet points, responsibilities, 
+               or achievements from the original resume. Every single point must be included in the tailored version.
+               This is absolutely mandatory - you are enhancing, not reducing content.
+            3. MANDATORY JSON-ONLY OUTPUT: Your response must be ONLY a valid JSON object
                - NO markdown formatting, NO code blocks
                - The first character must be { and the last character must be }
-               - Maintain the exact same structure as the input resume
-            3. ATS & HUMAN OPTIMIZATION: The resume must be rich in keywords from the job description but also 
+               - Maintain the exact same structure as the input sections
+            4. ATS & HUMAN OPTIMIZATION: The sections must be rich in keywords from the job description but also 
                well-written, professional, and achievement-oriented for human readers.
-            4. PRESERVE STRUCTURE: Keep the same field names and structure as the input resume. If the input has 
-               "work_experience", use "work_experience" in output. If it has "skills" as an object with categories, 
-               maintain that structure.
+            5. PRESERVE STRUCTURE: Keep the same field names and structure as the input sections.
 
             PROCESS TO FOLLOW:
 
@@ -53,37 +54,56 @@ def create_resume_tailor_agent(model_name: str = "gemma3:4b-it-qat") -> Agent:
                First, deeply analyze the job description. Identify the top 5-10 most critical keywords, skills 
                (technical and soft), and qualifications. Understand the core responsibilities of the role.
 
-            2. Analyze User Resume:
-               Next, carefully review the resume to understand the candidate's background, skills, and accomplishments.
+            2. Analyze Resume Sections:
+               Next, carefully review the provided sections to understand the candidate's background, skills, and accomplishments.
 
             3. Execute Section-by-Section Tailoring:
-               Revise the resume according to these instructions:
+               Tailor the sections according to these instructions:
 
-               - Professional Summary/Objective: Rewrite any summary, objective, or about section into a powerful 
-                 2-3 sentence paragraph. It must directly address the key requirements of the job description and 
-                 immediately signal that the candidate is a strong fit.
+               - Summary: Rewrite the professional summary into a powerful 2-3 sentence paragraph that directly 
+                 addresses the key requirements of the job description. It must immediately signal that the candidate 
+                 is a strong fit for this specific role. Include relevant keywords from the job description while 
+                 maintaining authenticity based on the candidate's actual experience.
 
-               - Experience/Work History: This is the most critical section. PRESERVE ALL work experience entries from the original resume.
+               - Skills: Review and reorganize the skills section. Ensure it prominently features the key skills 
+                 identified from the job description, provided they are substantiated by the user's experience. 
+                 Classify the skills into separate categories that are relevant to the job description.
+                 Prioritize the most relevant skills for this specific job.
+
+               - Work Experience: This is the most critical section. PRESERVE ALL work experience entries.
                  For each work experience entry, you must:
-                 * KEEP ALL existing bullet points/responsibilities - do not remove or omit any content
+                 * MANDATORY: KEEP ALL existing bullet points/responsibilities - do not remove or omit any content whatsoever
+                 * Count the original bullet points and ensure the same count appears in your output
                  * ENHANCE each bullet point by starting with a strong action verb (e.g., "Orchestrated," "Engineered," "Maximized," "Analyzed")
                  * Quantify results wherever possible using numbers and metrics to demonstrate impact. If the original resume 
                    lacks metrics, rephrase to emphasize the outcome of the action.
                  * Weave the keywords and phrases from the job description into the bullet points where they align with 
                    the user's actual experience.
-                 * MAINTAIN the complete work history - every job, every responsibility, every achievement must be included
+                 * ABSOLUTE REQUIREMENT: MAINTAIN the complete work history - every job, every responsibility, every achievement must be included
+                 * If the original has 5 bullet points, your output must have 5 bullet points (enhanced, not removed)
 
-               - Skills: Review the skills section. Ensure it prominently features the key skills identified from the job 
-                 description, provided they are substantiated by the user's experience. Classify the skills into separate categories that is relevant to the job description.
+               - Projects: Enhance project descriptions to highlight relevant technologies, skills, and outcomes that align 
+                 with the job description. For each project:
+                 * MANDATORY: KEEP ALL existing projects - do not remove any
+                 * MANDATORY: KEEP ALL existing project description points - do not remove or omit any content
+                 * Count the original description bullet points and ensure the same count appears in your output
+                 * ENHANCE descriptions with relevant keywords from the job description
+                 * Emphasize technologies and skills that match the job requirements
+                 * Quantify results and impact where possible
+                 * If the original project has 3 description points, your output must have 3 description points (enhanced, not removed)
 
             ABSOLUTE FINAL REQUIREMENT - PURE JSON ONLY:
-            Your response must be ONLY a valid JSON object. This is mandatory and non-negotiable.
+            Your response must be ONLY a valid JSON object with the tailored sections. This is mandatory and non-negotiable.
             - Begin with { and end with }
             - NO text before the JSON, NO text after the JSON
             - NO markdown, NO code blocks, NO backticks
             - NO explanations, NO apologies, NO comments
             - Just the raw JSON object and absolutely nothing else
-            - Maintain the exact same structure as the input resume
+            - Maintain the exact same structure as the input sections
+            
+            FINAL REMINDER: DO NOT REMOVE ANY CONTENT. Every bullet point, responsibility, achievement, and project description 
+            from the original resume MUST appear in your tailored output. You are enhancing and optimizing, NOT reducing or summarizing.
+            The total number of bullet points in each section should remain exactly the same.
             """),
         markdown=False,
         show_tool_calls=False,
@@ -177,32 +197,30 @@ def parse_json_response(response_text: str) -> Optional[Dict]:
     print(f"Failed to parse JSON from response: {response_text[:500]}...")
     return None
 
-async def tailor_resume(resume_data: Dict[str, Any], job_desc: Dict[str, Any], model_name: str = "llama3.2:latest") -> Optional[Dict[str, Any]]:
+async def tailor_resume(resume_data: Dict[str, Any], job_description: str, model_name: str = "llama3.2:latest") -> Optional[Dict[str, Any]]:
     """
-    Takes resume data and a job description, then returns a tailored resume.
+    Takes focused resume data and a job description, then returns tailored sections.
 
     Args:
-        resume_data (Dict[str, Any]): The user's resume data as a dictionary.
-        job_desc (Dict[str, Any]): The job description as a dictionary.
+        resume_data (Dict[str, Any]): The user's focused resume data (skills, work_experience, projects).
+        job_description (str): The job description as a string.
         model_name (str): The name of the Ollama model to use.
 
     Returns:
-        Dict[str, Any]: A dictionary containing the tailored resume data, or None if parsing fails.
+        Dict[str, Any]: A dictionary containing the tailored resume sections, or None if parsing fails.
     """
     
     # Create the agent
     agent = create_resume_tailor_agent(model_name)
     
-    # Extract and clean the job description text
-    job_description_text = job_desc.get('description', '')
-    # Replace newline characters with spaces
-    job_description_text = job_description_text.replace('\n', ' ')
+    # Clean the job description text
+    job_description_text = job_description.replace('\n', ' ')
     
-    # Create the prompt with the resume and job description data
+    # Create the prompt with the focused resume sections and job description
     prompt = f"""
-    Please tailor the following resume for the specific job description provided. Follow all the rules and guidelines specified in your instructions.
+    Please tailor the following focused resume sections for the specific job description provided. Follow all the rules and guidelines specified in your instructions.
 
-    User's Resume:
+    Resume Sections to Tailor:
     ---
     {json.dumps(resume_data, indent=2)}
     ---
@@ -212,7 +230,10 @@ async def tailor_resume(resume_data: Dict[str, Any], job_desc: Dict[str, Any], m
     {job_description_text}
     ---
 
-    CRITICAL: Return ONLY a valid JSON object with the tailored resume. Your response must start with {{ and end with }}. NO other text allowed.
+    CRITICAL REMINDERS:
+    1. Return ONLY a valid JSON object with the tailored resume sections. Your response must start with {{ and end with }}. NO other text allowed.
+    2. PRESERVE ALL CONTENT: Do not remove any bullet points, responsibilities, or achievements. Enhance them, don't delete them.
+    3. Maintain the exact same number of bullet points in each section as the original resume.
     """
 
     try:
@@ -227,8 +248,6 @@ async def tailor_resume(resume_data: Dict[str, Any], job_desc: Dict[str, Any], m
         
         if tailored_data:
             print("Successfully tailored resume!")
-            print("Tailored resume:")
-            print(tailored_data)
             return tailored_data
         else:
             print("Failed to parse JSON from agent response.")
@@ -242,33 +261,54 @@ async def tailor_resume(resume_data: Dict[str, Any], job_desc: Dict[str, Any], m
 async def example_usage():
     """Example of how to use the resume tailor functions"""
     
-    # Example job description (flexible structure)
-    job = {
-        "title": "Senior Python Developer",
-        "company": "TechCorp Inc.",
-        "location": "San Francisco, CA",
-        "description": """
-        We are seeking a Senior Python Developer to join our team. The ideal candidate will have:
-        - 5+ years of Python development experience
-        - Experience with FastAPI, Django, or Flask
-        - Knowledge of PostgreSQL and database design
-        - Experience with cloud platforms (AWS, GCP)
-        - Strong problem-solving skills
-        - Experience with agile development methodologies
-        """,
-        "requirements": ["Python", "FastAPI", "PostgreSQL", "AWS", "5+ years experience"],
-        "preferred_skills": ["Django", "Flask", "GCP", "Agile"]
+    # Example job description
+    job_description = """
+    We are seeking a Senior Python Developer to join our team. The ideal candidate will have:
+    - 5+ years of Python development experience
+    - Experience with FastAPI, Django, or Flask
+    - Knowledge of PostgreSQL and database design
+    - Experience with cloud platforms (AWS, GCP)
+    - Strong problem-solving skills
+    - Experience with agile development methodologies
+    """
+    
+    # Example focused resume data (what would be sent to the tailoring agent)
+    focused_resume_example = {
+        "summary": "Experienced software developer with 3+ years of experience in web development and database management. Skilled in Python, JavaScript, and modern frameworks.",
+        "skills": {
+            "Technical": ["Python", "JavaScript", "SQL"],
+            "Programming Languages": ["Python", "JavaScript", "Java"],
+            "Frameworks": ["Django", "React", "Node.js"],
+            "Tools": ["Git", "Docker", "Linux"],
+            "Databases": ["MySQL", "MongoDB"],
+            "Other": ["Problem Solving", "Team Leadership"]
+        },
+        "work_experience": [
+            {
+                "company": "Example Corp",
+                "title": "Software Developer",
+                "start_date": "2020-01",
+                "end_date": "Present",
+                "description": ["Developed web applications using Python", "Collaborated with cross-functional teams"]
+            }
+        ],
+        "projects": [
+            {
+                "title": "E-commerce Platform",
+                "description": ["Built full-stack web application", "Implemented user authentication"],
+                "technologies_used": ["Python", "Django", "PostgreSQL"]
+            }
+        ]
     }
     
     print("Resume tailor functions ready with Ollama!")
-    print(f"Ready to tailor resumes for: {job['title']} at {job['company']}")
+    print("Ready to tailor focused resume sections (summary, skills, work_experience, projects)")
     print("Ensure Ollama is running and llama3.2:latest model is pulled.")
     
     # Example usage:
-    # resume_data = {...}  # Your resume JSON data
-    # tailored_resume = await tailor_resume(resume_data, job)
+    # tailored_sections = await tailor_resume(focused_resume_example, job_description)
     
-    return job
+    return {"job_description": job_description, "focused_resume_example": focused_resume_example}
 
 if __name__ == "__main__":
     # Test the resume tailor functions

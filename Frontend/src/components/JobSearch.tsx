@@ -112,24 +112,10 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
         throw new Error('No resume uploaded. Please upload a resume first.');
       }
 
-      // Transform jobs data to match backend expected format
+      // Transform jobs data to send job descriptions and company names
       const jobDescriptions = selectedJobsData.map(job => ({
-        id: job.id,
-        title: job.title,
-        company: job.company,
-        location: job.location,
         description: job.description,
-        requirements: [], // You might want to extract this from the job description
-        preferred_skills: [], // You might want to extract this from the job description
-        employment_type: job.employmentType,
-        experience_level: job.experienceLevel,
-        salary: job.salary,
-        linkedin_url: job.linkedinUrl,
-        posted_date: job.postedDate,
-        applicants: job.applicants,
-        industry: job.industry,
-        company_size: job.companySize,
-        skills: job.skills
+        company: job.company
       }));
 
       const payload = {
