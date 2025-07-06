@@ -141,7 +141,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({ job, isOpen, o
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-4">Job Details</h3>
               <div className="prose prose-gray max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{job.description}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm as any]}>{job.description}</ReactMarkdown>
               </div>
             </div>
 
