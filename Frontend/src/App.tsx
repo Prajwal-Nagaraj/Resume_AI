@@ -26,6 +26,7 @@ function App() {
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [selectedJobsForTailoring, setSelectedJobsForTailoring] = useState<Job[]>([]);
+  const [tailoringTaskId, setTailoringTaskId] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any | null>(null);
 
   const handleFileUpload = (file: File, resumeId: string) => {
@@ -82,8 +83,9 @@ function App() {
     }
   };
 
-  const handleJobsTailored = (jobs: Job[]) => {
+  const handleJobsTailored = (jobs: Job[], taskId: string) => {
     setSelectedJobsForTailoring(jobs);
+    setTailoringTaskId(taskId);
     setActiveTab('tailoring');
   };
 
@@ -121,6 +123,7 @@ function App() {
         return (
           <ResumeTailoring 
             selectedJobs={selectedJobsForTailoring}
+            taskId={tailoringTaskId}
             onBack={handleBackToJobSearch}
           />
         );

@@ -78,6 +78,8 @@ class TailorResponse(BaseModel):
 class TailorStatusResponse(BaseModel):
     task_id: str
     status: str  # "pending", "processing", "completed", "failed"
+    progress: Optional[float] = None  # 0 - 100
+    job_statuses: Optional[List[Dict[str, Any]]] = None  # per-job status information
     tailored_resumes: Optional[List[Dict]] = None
     download_links: Optional[List[Dict]] = None
     error_message: Optional[str] = None
@@ -283,7 +285,18 @@ async def tailor_resume(request: TailorRequest, background_tasks: BackgroundTask
         "tailored_resumes": None,
         "download_links": None,
         "error_message": None,
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now().isoformat(),
+        "job_statuses": [
+            {
+                "job_title": jd.get("title", "Unknown Title"),
+                "company": jd.get("company", "Unknown Company"),
+                "status": "pending",
+                "json_filename": None,
+                "pdf_filename": None,
+                "error_message": None
+            } for jd in request.job_descriptions
+        ],
+        "progress": 0.0
     }
     
     # Start background tailoring task
@@ -308,6 +321,8 @@ async def get_tailoring_status(task_id: str):
     return TailorStatusResponse(
         task_id=task_id,
         status=job_data["status"],
+        progress=job_data.get("progress", 0.0),
+        job_statuses=job_data.get("job_statuses"),
         tailored_resumes=job_data["tailored_resumes"],
         download_links=job_data["download_links"],
         error_message=job_data["error_message"]
@@ -432,6 +447,8 @@ async def perform_tailoring(task_id: str):
         
         for i, job_desc_data in enumerate(job_descriptions):
             try:
+                # Tailoring update processing status
+                tailoring_jobs[task_id]["job_statuses"][i]["status"] = "processing"
                 # Tailor resume for this job
                 job_description_text = job_desc_data.get("description", "")
                 tailored_content = await tailor_resume_with_ai(resume_data, job_description_text)
@@ -465,32 +482,47 @@ async def perform_tailoring(task_id: str):
                         "json": f"/api/download/{json_filename}",
                         "pdf": f"/api/download/{pdf_filename}" if pdf_generated else f"/api/download/{json_filename}/pdf"
                     })
+                    
+                    # Update job status to completed
+                    tailoring_jobs[task_id]["job_statuses"][i].update({
+                        "status": "completed",
+                        "json_filename": json_filename,
+                        "pdf_filename": pdf_filename if pdf_generated else None,
+                    })
+                else:
+                    raise ValueError("No tailored content returned")
                 
             except Exception as e:
                 print(f"Error tailoring resume for job {i}: {e}")
+                tailoring_jobs[task_id]["job_statuses"][i].update({
+                    "status": "failed",
+                    "error_message": str(e)
+                })
                 continue
+            finally:
+                # Update progress after each attempt
+                completed_or_failed = sum(1 for js in tailoring_jobs[task_id]["job_statuses"] if js["status"] in ("completed", "failed"))
+                total_jobs = len(tailoring_jobs[task_id]["job_statuses"])
+                progress_pct = (completed_or_failed / total_jobs) * 100.0 if total_jobs else 0.0
+                tailoring_jobs[task_id]["progress"] = progress_pct
         
-        if tailored_resumes:
-            tailoring_jobs[task_id].update({
-                "status": "completed",
-                "tailored_resumes": tailored_resumes,
-                "download_links": download_links,
-                "error_message": None
-            })
-        else:
-            tailoring_jobs[task_id].update({
-                "status": "failed",
-                "tailored_resumes": None,
-                "download_links": None,
-                "error_message": "Failed to tailor any resumes"
-            })
+        # After processing all jobs determine overall status
+        overall_status = "completed" if any(js["status"] == "completed" for js in tailoring_jobs[task_id]["job_statuses"]) else "failed"
+        tailoring_jobs[task_id].update({
+            "status": overall_status,
+            "tailored_resumes": tailored_resumes if tailored_resumes else None,
+            "download_links": download_links if download_links else None,
+            "error_message": None if overall_status == "completed" else "Failed to tailor any resumes"
+        })
             
     except Exception as e:
         tailoring_jobs[task_id].update({
             "status": "failed",
             "tailored_resumes": None,
             "download_links": None,
-            "error_message": str(e)
+            "error_message": str(e),
+            "progress": 0.0,
+            "job_statuses": [] # Clear job statuses on failure
         })
 
 # Health check endpoint

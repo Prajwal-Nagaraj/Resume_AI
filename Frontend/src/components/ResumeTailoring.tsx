@@ -39,88 +39,105 @@ interface TailoringJob extends Job {
 
 interface ResumeTailoringProps {
   selectedJobs: Job[];
+  taskId: string | null;
   onBack: () => void;
 }
 
-export const ResumeTailoring: React.FC<ResumeTailoringProps> = ({ selectedJobs, onBack }) => {
+export const ResumeTailoring: React.FC<ResumeTailoringProps> = ({ selectedJobs, taskId, onBack }) => {
   const [tailoringJobs, setTailoringJobs] = useState<TailoringJob[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(true);
   const [completedCount, setCompletedCount] = useState(0);
 
+  // Initialize jobs when component mounts
   useEffect(() => {
-    // Initialize tailoring jobs with pending status
-    const initialJobs: TailoringJob[] = selectedJobs.map(job => ({
+    const initJobs: TailoringJob[] = selectedJobs.map(job => ({
       ...job,
       status: 'pending',
       progress: 0
     }));
-    
-    setTailoringJobs(initialJobs);
-    
-    // Start the tailoring process
-    startTailoringProcess(initialJobs);
+    setTailoringJobs(initJobs);
   }, [selectedJobs]);
 
-  const startTailoringProcess = async (jobs: TailoringJob[]) => {
-    setIsProcessing(true);
-    
-    // Process each job sequentially with realistic timing
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      
-      // Update job to processing status
-      setTailoringJobs(prev => prev.map(j => 
-        j.id === job.id 
-          ? { ...j, status: 'processing', processingStartTime: new Date() }
-          : j
-      ));
+  // Poll backend for status updates
+  useEffect(() => {
+    if (!taskId) return;
 
-      // Simulate tailoring process with progress updates
-      await simulateTailoringProgress(job.id);
-      
-      // Mark as completed
-      const tailoredResumeUrl = await generateTailoredResume(job);
-      
-      setTailoringJobs(prev => prev.map(j => 
-        j.id === job.id 
-          ? { 
-              ...j, 
-              status: 'completed', 
-              progress: 100,
-              completedTime: new Date(),
-              tailoredResumeUrl 
+    let interval: any;
+
+    const pollStatus = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/tailor/${taskId}/status`);
+        if (!res.ok) {
+          console.error('Failed to fetch tailoring status');
+          return;
+        }
+        const data = await res.json();
+
+        // Map backend job statuses to local state
+        setTailoringJobs(prevJobs => {
+          const updated = prevJobs.map(job => {
+            const backendStatus = data.job_statuses?.find(
+              (js: any) => js.company === job.company && js.job_title === job.title
+            );
+
+            if (!backendStatus) {
+              // If no status for this job yet, keep previous status
+              return job;
             }
-          : j
-      ));
 
-      setCompletedCount(prev => prev + 1);
-    }
-    
-    setIsProcessing(false);
-  };
+            const statusMap: any = {
+              pending: 'pending',
+              processing: 'processing',
+              completed: 'completed',
+              failed: 'failed'
+            };
 
-  const simulateTailoringProgress = async (jobId: string) => {
-    const steps = [10, 25, 40, 60, 75, 90, 100];
-    
-    for (const progress of steps) {
-      await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
-      
-      setTailoringJobs(prev => prev.map(job => 
-        job.id === jobId 
-          ? { ...job, progress }
-          : job
-      ));
-    }
-  };
+            const newStatus = statusMap[backendStatus.status] || 'processing';
 
-  const generateTailoredResume = async (job: TailoringJob): Promise<string> => {
-    // Simulate backend API call to generate tailored resume
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // In a real application, this would return the actual download URL from the backend
-    return `/api/download-resume/${job.id}`;
-  };
+            return {
+              ...job,
+              status: newStatus,
+              progress: newStatus === 'completed' ? 100 : job.progress,
+              tailoredResumeUrl: backendStatus.pdf_filename 
+                ? `/api/download/${backendStatus.pdf_filename}`
+                : backendStatus.json_filename
+                ? `/api/download/${backendStatus.json_filename}/pdf`
+                : job.tailoredResumeUrl,
+              errorMessage: backendStatus.error_message || undefined,
+              completedTime: newStatus === 'completed' && !job.completedTime ? new Date() : job.completedTime,
+              processingStartTime: job.processingStartTime || (newStatus === 'processing' ? new Date() : undefined)
+            };
+          });
+
+          // Update counts and progress
+          const completed = updated.filter(j => j.status === 'completed').length;
+          setCompletedCount(completed);
+
+          return updated;
+        });
+
+        // Update overall progress
+        setOverallProgress(data.progress || 0);
+
+        // Determine if processing is done
+        if (data.status === 'completed' || data.status === 'failed') {
+          setIsProcessing(false);
+          clearInterval(interval);
+        }
+
+      } catch (err) {
+        console.error('Error polling tailoring status:', err);
+      }
+    };
+
+    // Initial poll
+    pollStatus();
+    // Poll every 5 seconds
+    interval = setInterval(pollStatus, 5000);
+
+    return () => clearInterval(interval);
+  }, [taskId]);
 
   const handleDownload = async (job: TailoringJob) => {
     if (!job.tailoredResumeUrl) return;
@@ -213,12 +230,7 @@ export const ResumeTailoring: React.FC<ResumeTailoringProps> = ({ selectedJobs, 
     }
   };
 
-  // Calculate overall progress
-  useEffect(() => {
-    const totalProgress = tailoringJobs.reduce((sum, job) => sum + job.progress, 0);
-    const avgProgress = tailoringJobs.length > 0 ? totalProgress / tailoringJobs.length : 0;
-    setOverallProgress(avgProgress);
-  }, [tailoringJobs]);
+  // overallProgress is updated directly from backend polling
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">

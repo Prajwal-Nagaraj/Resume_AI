@@ -22,7 +22,7 @@ interface Job {
 }
 
 interface JobSearchProps {
-  onJobsTailored: (jobs: Job[]) => void;
+  onJobsTailored: (jobs: Job[], taskId: string) => void;
   resumeId: string | null;
 }
 
@@ -115,7 +115,8 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
       // Transform jobs data to send job descriptions and company names
       const jobDescriptions = selectedJobsData.map(job => ({
         description: job.description,
-        company: job.company
+        company: job.company,
+        title: job.title
       }));
 
       const payload = {
@@ -253,8 +254,8 @@ export const JobSearch: React.FC<JobSearchProps> = ({ onJobsTailored, resumeId }
         console.log('Resume tailoring started with task ID:', tailoringResult.task_id);
         alert(`✅ Resume tailoring started successfully! Task ID: ${tailoringResult.task_id}\n\nYou can check the status in the tailoring tab.`);
         
-        // Navigate to tailoring tab with selected jobs
-        onJobsTailored(selectedJobsData);
+        // Navigate to tailoring tab with selected jobs and task ID
+        onJobsTailored(selectedJobsData, tailoringResult.task_id);
       } else {
         throw new Error('No task ID received from backend');
       }
