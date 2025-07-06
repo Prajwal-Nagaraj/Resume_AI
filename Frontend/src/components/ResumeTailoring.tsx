@@ -232,6 +232,9 @@ export const ResumeTailoring: React.FC<ResumeTailoringProps> = ({ selectedJobs, 
 
   // overallProgress is updated directly from backend polling
 
+  // Helper to see if any job failed
+  const hasFailures = tailoringJobs.some(j => j.status === 'failed');
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -415,25 +418,60 @@ export const ResumeTailoring: React.FC<ResumeTailoringProps> = ({ selectedJobs, 
 
         {/* Summary */}
         {!isProcessing && (
-          <div className="mt-8 bg-white rounded-2xl shadow-lg p-6">
-            <div className="text-center">
-              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                All Resumes Tailored Successfully!
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Your {tailoringJobs.length} tailored resumes are ready for download. 
-                Each resume has been optimized specifically for the job requirements.
-              </p>
-              <button
-                onClick={handleDownloadAll}
-                className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-200"
-              >
-                <Download className="h-5 w-5" />
-                <span>Download All Tailored Resumes</span>
-              </button>
+          hasFailures ? (
+            <div className="mt-8 bg-white border border-red-200 rounded-2xl shadow-lg p-6">
+              <div className="text-center">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Some Resumes Failed to Tailor
+                </h3>
+                <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+                  We were unable to tailor {tailoringJobs.filter(j => j.status === 'failed').length} out of {tailoringJobs.length} resumes. You can review the error messages below and retry later.
+                </p>
+
+                {/* List failed jobs */}
+                <div className="text-left max-w-3xl mx-auto space-y-2 mb-6">
+                  {tailoringJobs.filter(j => j.status === 'failed').map((job, idx) => (
+                    <div key={idx} className="flex items-start space-x-2 text-sm text-red-600">
+                      <AlertCircle className="h-4 w-4 mt-0.5" />
+                      <span>
+                        <span className="font-semibold">{job.title}</span> @ {job.company} — {job.errorMessage || 'Unknown error'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {completedCount > 0 && (
+                  <button
+                    onClick={handleDownloadAll}
+                    className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-200"
+                  >
+                    <Download className="h-5 w-5" />
+                    <span>Download {completedCount} Successful Resume{completedCount > 1 ? 's' : ''}</span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-8 bg-white rounded-2xl shadow-lg p-6">
+              <div className="text-center">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  All Resumes Tailored Successfully!
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Your {tailoringJobs.length} tailored resume{tailoringJobs.length > 1 ? 's are' : ' is'} ready for download. Each resume has been optimized specifically for the job requirements.
+                </p>
+                <button
+                  onClick={handleDownloadAll}
+                  className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-200"
+                >
+                  <Download className="h-5 w-5" />
+                  <span>Download All Tailored Resumes</span>
+                </button>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>
