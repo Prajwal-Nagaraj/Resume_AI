@@ -1,3 +1,6 @@
+fastapi==0.115.12
+pydantic==2.11.4
+
 # Core AI and Agent Framework
 agno==1.5.0
 
@@ -11,10 +14,8 @@ Jinja2==3.1.4
 
 # Data Processing
 pandas==2.2.3
-pydantic==2.11.4
 
 # Web Framework (for future FastAPI backend)
-fastapi==0.115.12
 uvicorn==0.34.2
 
 # File Storage and Processing
